@@ -110,6 +110,6 @@ Una vez el sistema esté arriba, puedes consumir la API a través del puerto **8
 **Lautaro Emmanuel Liquitay Linares**
 * Estudiante de Ingeniería Informática - Universidad Nacional de Jujuy
 * [GitHub Profile](https://github.com/lautaroliqui)
-* [LinkedIn]([https://www.linkedin.com/in/lautaro-molina-b67484218/](https://www.linkedin.com/in/lautaro-emmanuel-liquitay-linares-aa0533259/))
+* [LinkedIn](https://www.linkedin.com/in/lautaro-emmanuel-liquitay-linares-aa0533259/)
 
 ---
