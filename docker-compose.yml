@@ -13,9 +13,9 @@ services:
       - "8084:8084"
     environment:
       - SPRING_PROFILES_ACTIVE=native
-      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:./configserver-ms-develop
+      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:./configserver-ms
     volumes:
-      - ./configserver-ms:/app/configserver-ms-develop
+      - ./configserver-ms:/app/configserver-ms
     networks:
       - andesfly-network
     healthcheck:
@@ -52,7 +52,6 @@ services:
       - SPRING_CONFIG_IMPORT=configserver:http://config-server:8084
       - SERVER_PORT=8066
       - JWT_SECRET=${JWT_SECRET:-ClaveSecretaDemoParaPortafolioGithub1234567890}
-      # FIX: Forzamos la URL de Eureka para evitar errores de localhost
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8065/eureka/
     networks:
       - andesfly-network
@@ -203,6 +202,22 @@ services:
       eureka-server:
         condition: service_started
     restart: on-failure
+
+  # ------------------------------------------------------------
+  # 4. FRONTEND
+  # ------------------------------------------------------------
+  frontend:
+    container_name: frontend-agencia
+    build:
+      context: ./frontend-agencia
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    networks:
+      - andesfly-network
+    depends_on:
+      gateway-server:
+        condition: service_started
 
 volumes:
   postgres-cliente-data:

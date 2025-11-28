@@ -9,7 +9,6 @@ import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
 import org.springframework.security.web.server.SecurityWebFilterChain;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverterAdapter;
 import org.springframework.core.convert.converter.Converter;
@@ -30,22 +29,21 @@ import java.util.Collections;
 @Configuration
 @EnableWebFluxSecurity
 public class SecurityConfig {
-
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:ClaveSecretaDemoParaPortafolioGithub1234567890}")
     private String jwtSecret;
 
     @Bean
     public SecurityWebFilterChain springSecurityFilterChain(ServerHttpSecurity http) {
-
-        http.cors(Customizer.withDefaults());
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()));
 
         http.csrf(csrf -> csrf.disable());
 
         http.authorizeExchange(exchanges -> exchanges
-                // 1. Rutas Públicas
+                // 1. Rutas Públicas (Auth y Swagger)
                 .pathMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**", "/webjars/**").permitAll()
                 .pathMatchers("/api/v1_1/auth/**").permitAll()
                 .pathMatchers(HttpMethod.GET, "/api/v1_1/vuelos/**", "/api/v1_1/destinos/**").permitAll()
+                .pathMatchers(HttpMethod.OPTIONS).permitAll()
 
                 // 2. Rutas de Vuelo (Solo ADMIN puede modificar)
                 .pathMatchers(HttpMethod.PUT, "/api/v1_1/vuelo/**").hasRole("ADMIN")
@@ -61,8 +59,7 @@ public class SecurityConfig {
                 .pathMatchers(HttpMethod.PUT, "/api/v1_1/cliente/**").hasRole("ADMIN")
                 .pathMatchers(HttpMethod.POST, "/api/v1_1/cliente/**").hasRole("ADMIN")
                 .pathMatchers(HttpMethod.DELETE, "/api/v1_1/cliente/**").hasRole("ADMIN")
-                .pathMatchers(HttpMethod.GET, "/api/v1_1/clientes/**").hasRole("ADMIN") // Listado completo solo ADMIN
-                // (Permitimos GET /cliente/{id} para usuarios autenticados)
+                .pathMatchers(HttpMethod.GET, "/api/v1_1/clientes/**").hasRole("ADMIN")
                 .pathMatchers(HttpMethod.GET, "/api/v1_1/cliente/**").authenticated()
 
                 // 4. Rutas de Reservas
@@ -72,8 +69,6 @@ public class SecurityConfig {
         );
 
         http.oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt ->
-                // 2. Le decimos que use nuestro decodificador manual (con la clave secreta)
-                //    y nuestro extractor de roles
                 jwt.jwtDecoder(reactiveJwtDecoder())
                         .jwtAuthenticationConverter(jwtAuthenticationConverter())
         ));
@@ -88,33 +83,38 @@ public class SecurityConfig {
             if (rol == null) {
                 return Collections.emptyList();
             }
+            if (!rol.startsWith("ROLE_")) {
+                rol = "ROLE_" + rol;
+            }
             Collection<GrantedAuthority> authorities = Collections.singletonList(new SimpleGrantedAuthority(rol));
             return authorities;
         });
         return new ReactiveJwtAuthenticationConverterAdapter(converter);
     }
 
-    // 2. Define la configuración de CORS (Evita errores en Front-end)
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Permite peticiones desde el frontend
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173", "http://localhost:5174"));
-        // Permite los métodos HTTP
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        // Permite todas las cabeceras (incluyendo 'Authorization' para el token)
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedOrigins(Arrays.asList("http://localhost:3000", "http://localhost:5173"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
+        configuration.setAllowedHeaders(Arrays.asList("Authorization", "Content-Type", "Cache-Control"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // Cachear la respuesta de preflight 1 hora
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration); // Aplica esta configuración a TODAS las rutas
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
     @Bean
     public ReactiveJwtDecoder reactiveJwtDecoder() {
+
+        if (jwtSecret == null || jwtSecret.length() < 32) {
+
+            jwtSecret = "ClaveSecretaDemoParaPortafolioGithub1234567890";
+        }
         byte[] keyBytes = jwtSecret.getBytes();
         SecretKeySpec secretKey = new SecretKeySpec(keyBytes, "HmacSHA256");
-
         return NimbusReactiveJwtDecoder.withSecretKey(secretKey).build();
     }
 }
