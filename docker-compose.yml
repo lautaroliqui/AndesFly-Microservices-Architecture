@@ -1,0 +1,214 @@
+version: '3.8'
+
+services:
+  # ------------------------------------------------------------
+  # 1. INFRAESTRUCTURA
+  # ------------------------------------------------------------
+  config-server:
+    container_name: config-server
+    build:
+      context: ./config-server
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      - SPRING_PROFILES_ACTIVE=native
+      - SPRING_CLOUD_CONFIG_SERVER_NATIVE_SEARCH_LOCATIONS=file:./configserver-ms-develop
+    volumes:
+      - ./configserver-ms:/app/configserver-ms-develop
+    networks:
+      - andesfly-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8084/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  eureka-server:
+    container_name: eureka-server
+    build:
+      context: ./eurekaserver
+      dockerfile: Dockerfile
+    ports:
+      - "8065:8065"
+    networks:
+      - andesfly-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+    restart: on-failure
+
+  gateway-server:
+    container_name: gateway-server
+    build:
+      context: ./gateway-server
+      dockerfile: Dockerfile
+    ports:
+      - "8066:8066"
+    environment:
+      - SPRING_APPLICATION_NAME=gatewayserver
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8084
+      - SERVER_PORT=8066
+      - JWT_SECRET=${JWT_SECRET:-ClaveSecretaDemoParaPortafolioGithub1234567890}
+      # FIX: Forzamos la URL de Eureka para evitar errores de localhost
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8065/eureka/
+    networks:
+      - andesfly-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+
+  # ------------------------------------------------------------
+  # 2. BASES DE DATOS
+  # ------------------------------------------------------------
+  postgres-cliente:
+    image: postgres:15
+    container_name: postgres_database_cliente
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=andesfly_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-admin}
+      - POSTGRES_DB=clientes_db
+    volumes:
+      - postgres-cliente-data:/var/lib/postgresql/data
+    networks:
+      - andesfly-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U andesfly_user -d clientes_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-vuelo:
+    image: postgres:15
+    container_name: postgres_database_vuelo
+    ports:
+      - "5433:5433"
+    environment:
+      - POSTGRES_USER=andesfly_user_vuelo
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-admin}
+      - POSTGRES_DB=vuelos_db
+    volumes:
+      - postgres-vuelo-data:/var/lib/postgresql/data
+    networks:
+      - andesfly-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U andesfly_user_vuelo -d vuelos_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-reserva:
+    image: postgres:15
+    container_name: postgres_database_reserva
+    ports:
+      - "5434:5434"
+    environment:
+      - POSTGRES_USER=reserva_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-admin}
+      - POSTGRES_DB=reservas_db
+    volumes:
+      - postgres-reserva-data:/var/lib/postgresql/data
+    networks:
+      - andesfly-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reserva_user -d reservas_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ------------------------------------------------------------
+  # 3. MICROSERVICIOS DE NEGOCIO
+  # ------------------------------------------------------------
+  ms-cliente:
+    container_name: ms-cliente-container
+    build:
+      context: ./microservicio-cliente
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_APPLICATION_NAME=cliente
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8084
+      - SERVER_PORT=8080
+      - DB_PASSWORD=${DB_PASSWORD:-admin}
+      - JWT_SECRET=${JWT_SECRET:-ClaveSecretaDemoParaPortafolioGithub1234567890}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8065/eureka/
+    networks:
+      - andesfly-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres-cliente:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+
+  ms-vuelo:
+    container_name: ms-vuelo-container
+    build:
+      context: ./microservicio-vuelo
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_APPLICATION_NAME=vuelo
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8084
+      - SERVER_PORT=8081
+      - DB_PASSWORD=${DB_PASSWORD:-admin}
+      - JWT_SECRET=${JWT_SECRET:-ClaveSecretaDemoParaPortafolioGithub1234567890}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8065/eureka/
+    networks:
+      - andesfly-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres-vuelo:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+
+  ms-reserva:
+    container_name: ms-reserva-container
+    build:
+      context: ./microservicio-reserva
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8082"
+    environment:
+      - SPRING_APPLICATION_NAME=reserva
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CONFIG_IMPORT=configserver:http://config-server:8084
+      - SERVER_PORT=8082
+      - DB_PASSWORD=${DB_PASSWORD:-admin}
+      - JWT_SECRET=${JWT_SECRET:-ClaveSecretaDemoParaPortafolioGithub1234567890}
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8065/eureka/
+    networks:
+      - andesfly-network
+    depends_on:
+      config-server:
+        condition: service_healthy
+      postgres-reserva:
+        condition: service_healthy
+      eureka-server:
+        condition: service_started
+    restart: on-failure
+
+volumes:
+  postgres-cliente-data:
+  postgres-vuelo-data:
+  postgres-reserva-data:
+
+networks:
+  andesfly-network:
+    driver: bridge
